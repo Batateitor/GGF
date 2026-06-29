@@ -5,7 +5,7 @@ public class EnemyCollision : MonoBehaviour
 {
     private void OnCollisionEnter(Collision collision)
     {
-        if (collision.transform.CompareTag("Player"))
+        if (CollisionFilters.IsPlayer(collision.collider))
         {
             RestartScene();
         }

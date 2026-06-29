@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(SteeringAgent))]
+[RequireComponent(typeof(Rigidbody))]
 public class AdvancedEnemyAgent : MonoBehaviour
 {
     public enum EnemyStyle
@@ -24,7 +25,6 @@ public class AdvancedEnemyAgent : MonoBehaviour
 
     [Header("Identity")]
     public EnemyStyle style = EnemyStyle.Balanced;
-    public string displayName = "Enemy";
 
     [Header("References")]
     public Transform player;
@@ -35,7 +35,8 @@ public class AdvancedEnemyAgent : MonoBehaviour
     public float viewDistance = 7f;
     [Range(20f, 180f)] public float viewAngle = 95f;
     public LayerMask visionBlockMask = -1;
-    public LayerMask pathObstacleMask = (1 << 0) | (1 << 3);
+    public LayerMask pathObstacleMask;
+    public AStarPathfinder.PathSettings pathSettings = AStarPathfinder.PathSettings.Default;
 
     [Header("Movement Speeds")]
     public float patrolSpeed = 2.5f;
@@ -67,24 +68,27 @@ public class AdvancedEnemyAgent : MonoBehaviour
     private void Awake()
     {
         steering = GetComponent<SteeringAgent>();
+        NormalizeConfiguration();
     }
 
     private void Start()
     {
-        if (player == null)
+        ResolvePlayerReference();
+
+        if (player != null)
         {
-            GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
-            if (playerObject != null)
-            {
-                player = playerObject.transform;
-                previousPlayerPosition = player.position;
-            }
+            previousPlayerPosition = player.position;
         }
 
         ChangeState(EnemyState.Patrol);
     }
 
-    private void Update()
+    private void OnValidate()
+    {
+        NormalizeConfiguration();
+    }
+
+    private void FixedUpdate()
     {
         attackCooldown -= Time.deltaTime;
 
@@ -324,18 +328,21 @@ public class AdvancedEnemyAgent : MonoBehaviour
 
         for (int i = 0; i < hits.Length; i++)
         {
-            Transform hitTransform = hits[i].transform;
-            if (hitTransform == transform || hitTransform.IsChildOf(transform))
+            Collider hitCollider = hits[i].collider;
+            if (CollisionFilters.IsSelf(hitCollider, transform))
             {
                 continue;
             }
 
-            if (hitTransform == player || hitTransform.IsChildOf(player))
+            if (CollisionFilters.IsPlayer(hitCollider))
             {
                 return true;
             }
 
-            return false;
+            if (CollisionFilters.BlocksNavigation(hitCollider))
+            {
+                return false;
+            }
         }
 
         return true;
@@ -352,7 +359,7 @@ public class AdvancedEnemyAgent : MonoBehaviour
         if (shouldRefresh)
         {
             currentPath.Clear();
-            currentPath.AddRange(AStarPathfinder.FindPath(transform.position, target, pathObstacleMask));
+            currentPath.AddRange(AStarPathfinder.FindPath(transform.position, target, pathObstacleMask, pathSettings));
             pathIndex = 0;
             nextPathRefreshTime = Time.time + pathRefreshInterval;
         }
@@ -403,6 +410,42 @@ public class AdvancedEnemyAgent : MonoBehaviour
         currentPath.Clear();
         pathIndex = 0;
         nextPathRefreshTime = 0f;
+    }
+
+    private void ResolvePlayerReference()
+    {
+        if (player != null)
+        {
+            return;
+        }
+
+        PlayerController playerController = Object.FindAnyObjectByType<PlayerController>();
+        if (playerController != null)
+        {
+            player = playerController.transform;
+            return;
+        }
+
+        NoiseEmitter noiseEmitter = Object.FindAnyObjectByType<NoiseEmitter>();
+        if (noiseEmitter != null)
+        {
+            player = noiseEmitter.transform;
+        }
+    }
+
+    private void NormalizeConfiguration()
+    {
+        if (pathObstacleMask.value == 0)
+        {
+            pathObstacleMask = CollisionFilters.DefaultObstacleMask();
+        }
+
+        if (visionBlockMask.value == 0)
+        {
+            visionBlockMask = CollisionFilters.DefaultObstacleMask();
+        }
+
+        pathSettings = pathSettings.Validated();
     }
 
     private void OnDrawGizmosSelected()

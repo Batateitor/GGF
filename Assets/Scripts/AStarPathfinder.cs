@@ -4,9 +4,44 @@ using UnityEngine.AI;
 
 public static class AStarPathfinder
 {
-    private const float GridCellSize = 1.25f;
-    private const float AgentClearance = 0.35f;
-    private const float CastHeight = 0.7f;
+    [System.Serializable]
+    public struct PathSettings
+    {
+        [Min(0.25f)] public float gridCellSize;
+        [Min(0.05f)] public float agentClearance;
+        [Min(0.05f)] public float castHeight;
+        [Min(1f)] public float searchPadding;
+        [Min(0.1f)] public float navMeshSampleRadius;
+        [Min(0.01f)] public float goalTolerance;
+        [Min(0.001f)] public float minSegmentLength;
+
+        public static PathSettings Default => new PathSettings
+        {
+            gridCellSize = 1.25f,
+            agentClearance = 0.35f,
+            castHeight = 0.7f,
+            searchPadding = 8f,
+            navMeshSampleRadius = 2.5f,
+            goalTolerance = 0.15f,
+            minSegmentLength = 0.01f
+        };
+
+        public PathSettings Validated()
+        {
+            PathSettings fallback = Default;
+            PathSettings settings = this;
+
+            if (settings.gridCellSize <= 0f) settings.gridCellSize = fallback.gridCellSize;
+            if (settings.agentClearance <= 0f) settings.agentClearance = fallback.agentClearance;
+            if (settings.castHeight <= 0f) settings.castHeight = fallback.castHeight;
+            if (settings.searchPadding <= 0f) settings.searchPadding = fallback.searchPadding;
+            if (settings.navMeshSampleRadius <= 0f) settings.navMeshSampleRadius = fallback.navMeshSampleRadius;
+            if (settings.goalTolerance <= 0f) settings.goalTolerance = fallback.goalTolerance;
+            if (settings.minSegmentLength <= 0f) settings.minSegmentLength = fallback.minSegmentLength;
+
+            return settings;
+        }
+    }
 
     private sealed class SearchRecord
     {
@@ -26,28 +61,43 @@ public static class AStarPathfinder
 
     public static List<Vector3> FindPath(Vector3 start, Vector3 goal, LayerMask obstacleMask)
     {
-        if (!PathBlockedBetween(start, goal, obstacleMask))
+        return FindPath(start, goal, obstacleMask, PathSettings.Default);
+    }
+
+    public static List<Vector3> FindPath(Vector3 start, Vector3 goal, LayerMask obstacleMask, PathSettings settings)
+    {
+        settings = settings.Validated();
+        obstacleMask = NormalizeObstacleMask(obstacleMask);
+
+        if (!PathBlockedBetween(start, goal, obstacleMask, settings))
         {
             return new List<Vector3> { goal };
         }
 
-        if (TryFindNavMeshPath(start, goal, out List<Vector3> navMeshPath))
+        if (TryFindNavMeshPath(start, goal, settings, out List<Vector3> navMeshPath))
         {
             return navMeshPath;
         }
 
         PathNode[] nodes = Object.FindObjectsByType<PathNode>(FindObjectsInactive.Exclude);
-        List<Vector3> nodePath = FindPath(start, goal, nodes, obstacleMask);
-        if (nodePath.Count > 1 || !PathBlockedBetween(start, nodePath[0], obstacleMask))
+        List<Vector3> nodePath = FindPath(start, goal, nodes, obstacleMask, settings);
+        if (nodePath.Count > 1 || !PathBlockedBetween(start, nodePath[0], obstacleMask, settings))
         {
             return nodePath;
         }
 
-        return FindGridPath(start, goal, obstacleMask);
+        return FindGridPath(start, goal, obstacleMask, settings);
     }
 
     public static List<Vector3> FindPath(Vector3 start, Vector3 goal, IReadOnlyList<PathNode> nodes, LayerMask obstacleMask)
     {
+        return FindPath(start, goal, nodes, obstacleMask, PathSettings.Default);
+    }
+
+    public static List<Vector3> FindPath(Vector3 start, Vector3 goal, IReadOnlyList<PathNode> nodes, LayerMask obstacleMask, PathSettings settings)
+    {
+        settings = settings.Validated();
+        obstacleMask = NormalizeObstacleMask(obstacleMask);
         List<Vector3> directPath = new List<Vector3> { goal };
 
         if (nodes == null || nodes.Count == 0)
@@ -55,15 +105,15 @@ public static class AStarPathfinder
             return directPath;
         }
 
-        PathNode startNode = FindNearestNode(start, nodes, obstacleMask);
-        PathNode goalNode = FindNearestNode(goal, nodes, obstacleMask);
+        PathNode startNode = FindNearestNode(start, nodes, obstacleMask, settings);
+        PathNode goalNode = FindNearestNode(goal, nodes, obstacleMask, settings);
 
         if (startNode == null || goalNode == null)
         {
             return directPath;
         }
 
-        List<PathNode> nodePath = Search(startNode, goalNode, nodes, obstacleMask);
+        List<PathNode> nodePath = Search(startNode, goalNode, nodes, obstacleMask, settings);
         if (nodePath.Count == 0)
         {
             return directPath;
@@ -79,7 +129,7 @@ public static class AStarPathfinder
         return path;
     }
 
-    private static List<PathNode> Search(PathNode startNode, PathNode goalNode, IReadOnlyList<PathNode> allNodes, LayerMask obstacleMask)
+    private static List<PathNode> Search(PathNode startNode, PathNode goalNode, IReadOnlyList<PathNode> allNodes, LayerMask obstacleMask, PathSettings settings)
     {
         List<SearchRecord> open = new List<SearchRecord>();
         HashSet<PathNode> closed = new HashSet<PathNode>();
@@ -101,7 +151,7 @@ public static class AStarPathfinder
 
             closed.Add(current.Node);
 
-            foreach (PathNode neighbor in GetNeighbors(current.Node, allNodes, obstacleMask))
+            foreach (PathNode neighbor in GetNeighbors(current.Node, allNodes, obstacleMask, settings))
             {
                 if (neighbor == null || closed.Contains(neighbor))
                 {
@@ -164,7 +214,7 @@ public static class AStarPathfinder
         return path;
     }
 
-    private static IEnumerable<PathNode> GetNeighbors(PathNode node, IReadOnlyList<PathNode> allNodes, LayerMask obstacleMask)
+    private static IEnumerable<PathNode> GetNeighbors(PathNode node, IReadOnlyList<PathNode> allNodes, LayerMask obstacleMask, PathSettings settings)
     {
         if (node.neighbors != null && node.neighbors.Count > 0)
         {
@@ -186,7 +236,7 @@ public static class AStarPathfinder
             }
 
             float distance = Vector3.Distance(node.Position, candidate.Position);
-            if (distance <= node.autoConnectDistance && !BlockedBetween(node.Position, candidate.Position, obstacleMask))
+            if (distance <= node.autoConnectDistance && !PathBlockedBetween(node.Position, candidate.Position, obstacleMask, settings))
             {
                 autoNeighbors.Add(candidate);
             }
@@ -195,7 +245,7 @@ public static class AStarPathfinder
         return autoNeighbors;
     }
 
-    private static PathNode FindNearestNode(Vector3 point, IReadOnlyList<PathNode> nodes, LayerMask obstacleMask)
+    private static PathNode FindNearestNode(Vector3 point, IReadOnlyList<PathNode> nodes, LayerMask obstacleMask, PathSettings settings)
     {
         PathNode best = null;
         float bestScore = float.PositiveInfinity;
@@ -209,7 +259,7 @@ public static class AStarPathfinder
             }
 
             float distance = Vector3.Distance(point, node.Position);
-            float blockedPenalty = BlockedBetween(point, node.Position, obstacleMask) ? 1000f : 0f;
+            float blockedPenalty = PathBlockedBetween(point, node.Position, obstacleMask, settings) ? 1000f : 0f;
             float score = distance + blockedPenalty;
 
             if (score < bestScore)
@@ -227,17 +277,12 @@ public static class AStarPathfinder
         return Vector3.Distance(from.Position, to.Position);
     }
 
-    private static bool BlockedBetween(Vector3 from, Vector3 to, LayerMask obstacleMask)
-    {
-        return PathBlockedBetween(from, to, obstacleMask);
-    }
-
-    private static bool TryFindNavMeshPath(Vector3 start, Vector3 goal, out List<Vector3> path)
+    private static bool TryFindNavMeshPath(Vector3 start, Vector3 goal, PathSettings settings, out List<Vector3> path)
     {
         path = new List<Vector3>();
 
-        if (!NavMesh.SamplePosition(start, out NavMeshHit startHit, 2.5f, NavMesh.AllAreas) ||
-            !NavMesh.SamplePosition(goal, out NavMeshHit goalHit, 2.5f, NavMesh.AllAreas))
+        if (!NavMesh.SamplePosition(start, out NavMeshHit startHit, settings.navMeshSampleRadius, NavMesh.AllAreas) ||
+            !NavMesh.SamplePosition(goal, out NavMeshHit goalHit, settings.navMeshSampleRadius, NavMesh.AllAreas))
         {
             return false;
         }
@@ -258,7 +303,7 @@ public static class AStarPathfinder
             path.Add(navMeshPath.corners[i]);
         }
 
-        if (path.Count == 0 || Vector3.Distance(path[path.Count - 1], goalHit.position) > 0.15f)
+        if (path.Count == 0 || Vector3.Distance(path[path.Count - 1], goalHit.position) > settings.goalTolerance)
         {
             path.Add(goalHit.position);
         }
@@ -266,12 +311,12 @@ public static class AStarPathfinder
         return path.Count > 0;
     }
 
-    private static List<Vector3> FindGridPath(Vector3 start, Vector3 goal, LayerMask obstacleMask)
+    private static List<Vector3> FindGridPath(Vector3 start, Vector3 goal, LayerMask obstacleMask, PathSettings settings)
     {
         Vector2Int startCell = Vector2Int.zero;
-        Vector2Int goalCell = WorldToCell(goal, start);
+        Vector2Int goalCell = WorldToCell(goal, start, settings.gridCellSize);
 
-        int padding = Mathf.CeilToInt(8f / GridCellSize);
+        int padding = Mathf.CeilToInt(settings.searchPadding / settings.gridCellSize);
         int minX = Mathf.Min(startCell.x, goalCell.x) - padding;
         int maxX = Mathf.Max(startCell.x, goalCell.x) + padding;
         int minY = Mathf.Min(startCell.y, goalCell.y) - padding;
@@ -294,7 +339,7 @@ public static class AStarPathfinder
             GridRecord current = TakeBest(open);
             if (current.Cell == goalCell)
             {
-                return SmoothPath(BuildGridPath(current, start, goal), obstacleMask);
+                return SmoothPath(BuildGridPath(current, start, goal, settings), obstacleMask, settings);
             }
 
             closed.Add(current.Cell);
@@ -314,14 +359,14 @@ public static class AStarPathfinder
                         continue;
                     }
 
-                    Vector3 currentWorld = CellToWorld(current.Cell, start);
-                    Vector3 neighborWorld = CellToWorld(neighbor, start);
-                    if (CellBlocked(neighborWorld, obstacleMask) || PathBlockedBetween(currentWorld, neighborWorld, obstacleMask))
+                    Vector3 currentWorld = CellToWorld(current.Cell, start, settings.gridCellSize);
+                    Vector3 neighborWorld = CellToWorld(neighbor, start, settings.gridCellSize);
+                    if (CellBlocked(neighborWorld, obstacleMask, settings) || PathBlockedBetween(currentWorld, neighborWorld, obstacleMask, settings))
                     {
                         continue;
                     }
 
-                    float moveCost = x != 0 && y != 0 ? 1.4142f : 1f;
+                    float moveCost = x != 0 && y != 0 ? Mathf.Sqrt(2f) : 1f;
                     float newCost = current.CostSoFar + moveCost;
                     GridRecord existing = open.Find(record => record.Cell == neighbor);
 
@@ -364,14 +409,14 @@ public static class AStarPathfinder
         return best;
     }
 
-    private static List<Vector3> BuildGridPath(GridRecord endRecord, Vector3 origin, Vector3 goal)
+    private static List<Vector3> BuildGridPath(GridRecord endRecord, Vector3 origin, Vector3 goal, PathSettings settings)
     {
         List<Vector3> path = new List<Vector3>();
         GridRecord current = endRecord;
 
         while (current != null)
         {
-            path.Add(CellToWorld(current.Cell, origin));
+            path.Add(CellToWorld(current.Cell, origin, settings.gridCellSize));
             current = current.CameFrom;
         }
 
@@ -385,7 +430,7 @@ public static class AStarPathfinder
         return path;
     }
 
-    private static List<Vector3> SmoothPath(List<Vector3> path, LayerMask obstacleMask)
+    private static List<Vector3> SmoothPath(List<Vector3> path, LayerMask obstacleMask, PathSettings settings)
     {
         if (path.Count <= 2)
         {
@@ -398,7 +443,7 @@ public static class AStarPathfinder
         while (index < path.Count)
         {
             int next = path.Count - 1;
-            while (next > index + 1 && PathBlockedBetween(path[index], path[next], obstacleMask))
+            while (next > index + 1 && PathBlockedBetween(path[index], path[next], obstacleMask, settings))
             {
                 next--;
             }
@@ -415,15 +460,15 @@ public static class AStarPathfinder
         return smoothed;
     }
 
-    private static Vector2Int WorldToCell(Vector3 world, Vector3 origin)
+    private static Vector2Int WorldToCell(Vector3 world, Vector3 origin, float gridCellSize)
     {
         Vector3 offset = world - origin;
-        return new Vector2Int(Mathf.RoundToInt(offset.x / GridCellSize), Mathf.RoundToInt(offset.z / GridCellSize));
+        return new Vector2Int(Mathf.RoundToInt(offset.x / gridCellSize), Mathf.RoundToInt(offset.z / gridCellSize));
     }
 
-    private static Vector3 CellToWorld(Vector2Int cell, Vector3 origin)
+    private static Vector3 CellToWorld(Vector2Int cell, Vector3 origin, float gridCellSize)
     {
-        return new Vector3(origin.x + cell.x * GridCellSize, origin.y, origin.z + cell.y * GridCellSize);
+        return new Vector3(origin.x + cell.x * gridCellSize, origin.y, origin.z + cell.y * gridCellSize);
     }
 
     private static float GridHeuristic(Vector2Int from, Vector2Int to)
@@ -431,9 +476,9 @@ public static class AStarPathfinder
         return Vector2Int.Distance(from, to);
     }
 
-    private static bool CellBlocked(Vector3 point, LayerMask obstacleMask)
+    private static bool CellBlocked(Vector3 point, LayerMask obstacleMask, PathSettings settings)
     {
-        Collider[] hits = Physics.OverlapSphere(point + Vector3.up * CastHeight, AgentClearance, obstacleMask, QueryTriggerInteraction.Ignore);
+        Collider[] hits = Physics.OverlapSphere(point + Vector3.up * settings.castHeight, settings.agentClearance, obstacleMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < hits.Length; i++)
         {
             if (IsBlockingCollider(hits[i]))
@@ -445,19 +490,19 @@ public static class AStarPathfinder
         return false;
     }
 
-    private static bool PathBlockedBetween(Vector3 from, Vector3 to, LayerMask obstacleMask)
+    private static bool PathBlockedBetween(Vector3 from, Vector3 to, LayerMask obstacleMask, PathSettings settings)
     {
-        Vector3 a = from + Vector3.up * CastHeight;
-        Vector3 b = to + Vector3.up * CastHeight;
+        Vector3 a = from + Vector3.up * settings.castHeight;
+        Vector3 b = to + Vector3.up * settings.castHeight;
         Vector3 direction = b - a;
         float distance = direction.magnitude;
 
-        if (distance <= 0.01f)
+        if (distance <= settings.minSegmentLength)
         {
             return false;
         }
 
-        RaycastHit[] hits = Physics.SphereCastAll(a, AgentClearance, direction.normalized, distance, obstacleMask, QueryTriggerInteraction.Ignore);
+        RaycastHit[] hits = Physics.SphereCastAll(a, settings.agentClearance, direction.normalized, distance, obstacleMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < hits.Length; i++)
         {
             if (IsBlockingCollider(hits[i].collider))
@@ -471,22 +516,11 @@ public static class AStarPathfinder
 
     private static bool IsBlockingCollider(Collider hit)
     {
-        if (hit == null || hit.isTrigger)
-        {
-            return false;
-        }
+        return CollisionFilters.BlocksNavigation(hit);
+    }
 
-        if (hit.GetComponentInParent<AdvancedEnemyAgent>() != null)
-        {
-            return false;
-        }
-
-        Transform hitTransform = hit.transform;
-        if (hitTransform.CompareTag("Player") || hitTransform.GetComponentInParent<NoiseEmitter>() != null)
-        {
-            return false;
-        }
-
-        return true;
+    private static LayerMask NormalizeObstacleMask(LayerMask obstacleMask)
+    {
+        return obstacleMask.value != 0 ? obstacleMask : CollisionFilters.DefaultObstacleMask();
     }
 }
