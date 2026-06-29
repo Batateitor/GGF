@@ -8,6 +8,12 @@ public class NoiseEmitter : MonoBehaviour
 
         foreach (var hit in hits)
         {
+            if (hit.TryGetComponent<AdvancedEnemyAgent>(out var advancedEnemy))
+            {
+                advancedEnemy.OnHearNoise(transform.position, noiseRadius);
+                continue;
+            }
+
             if (hit.TryGetComponent<EnemyController>(out var enemy))
             {
                 enemy.OnHearNoise(transform.position);
