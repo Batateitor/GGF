@@ -140,9 +140,9 @@ Rigidbody:
   m_ImplicitTensor: 1
   m_UseGravity: 0
   m_IsKinematic: 0
-  m_Interpolate: 1
+  m_Interpolate: 0
   m_Constraints: 40
-  m_CollisionDetection: 1
+  m_CollisionDetection: 0
 --- !u!114 &200106
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -178,6 +178,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   style: 1
+  displayName: Enemy_SlowListener
   player: {fileID: 0}
   patrolPoints: []
   hearingRadius: 9.5
@@ -189,14 +190,6 @@ MonoBehaviour:
   pathObstacleMask:
     serializedVersion: 2
     m_Bits: 9
-  pathSettings:
-    gridCellSize: 1.25
-    agentClearance: 0.35
-    castHeight: 0.7
-    searchPadding: 8
-    navMeshSampleRadius: 2.5
-    goalTolerance: 0.15
-    minSegmentLength: 0.01
   patrolSpeed: 1.7
   investigateSpeed: 2.25
   chaseSpeed: 3.1

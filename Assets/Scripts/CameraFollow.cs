@@ -9,7 +9,6 @@ public class CameraFollow : MonoBehaviour
     [SerializeField] private float height = 13f;
     [SerializeField] private float zOffset = -6f;
     [SerializeField] private float smoothSpeed = 5f;
-    [SerializeField] private Vector3 rotationEuler = new Vector3(60f, 0f, 0f);
 
     private void LateUpdate()
     {
@@ -36,6 +35,6 @@ public class CameraFollow : MonoBehaviour
 
     private void ApplyRotation()
     {
-        transform.rotation = Quaternion.Euler(rotationEuler);
+        transform.rotation = Quaternion.Euler(60f, 0f, 0f);
     }
 }

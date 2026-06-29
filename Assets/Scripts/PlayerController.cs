@@ -179,10 +179,18 @@ public class PlayerController : MonoBehaviour
     private bool IsBlockingHit(RaycastHit hit)
     {
         if (hit.collider == null || hit.collider == bodyCollider || hit.collider.isTrigger) return false;
-        if (CollisionFilters.IsSelf(hit.collider, transform, rb)) return false;
-        if (CollisionFilters.IsEnemy(hit.collider)) return false;
+        if (hit.collider.transform == transform || hit.collider.transform.IsChildOf(transform)) return false;
+        if (rb != null && hit.collider.attachedRigidbody == rb) return false;
+        if (IsEnemyCollider(hit.collider)) return false;
 
         return true;
+    }
+
+    private static bool IsEnemyCollider(Collider hitCollider)
+    {
+        return hitCollider.GetComponentInParent<EnemyCollision>() != null ||
+               hitCollider.GetComponentInParent<AdvancedEnemyAgent>() != null ||
+               hitCollider.GetComponentInParent<EnemyController>() != null;
     }
 
     private static void GetCapsuleWorldPoints(CapsuleCollider capsule, out Vector3 pointA, out Vector3 pointB, out float radius)

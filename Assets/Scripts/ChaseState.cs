@@ -11,7 +11,7 @@ public class ChaseState : IState
 
     public void Update()
     {
-        if (enemy.CanSeePlayer())
+        if (enemy.vision.CanSeeTarget(enemy.player))
         {
             enemy.MoveTowards(enemy.player.position);
         }

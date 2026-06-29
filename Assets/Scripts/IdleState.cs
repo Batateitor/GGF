@@ -11,7 +11,7 @@ public class IdleState : IState
 
     public void Update()
     {
-        if (enemy.CanSeePlayer())
+        if (enemy.vision.CanSeeTarget(enemy.player))
         {
             enemy.SwitchToChase();
         }

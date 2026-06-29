@@ -15,12 +15,12 @@ public class InvestigateState : IState
     {
         enemy.MoveTowards(enemy.lastHeardPosition);
 
-        if (enemy.CanSeePlayer())
+        if (enemy.vision.CanSeeTarget(enemy.player))
         {
             enemy.SwitchToChase();
         }
 
-        if (Vector3.Distance(enemy.transform.position, enemy.lastHeardPosition) < enemy.investigateStopDistance)
+        if (Vector3.Distance(enemy.transform.position, enemy.lastHeardPosition) < 1f)
         {
             enemy.SwitchToIdle();
         }
