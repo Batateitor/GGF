@@ -1,0 +1,23 @@
+GGF: =P
+Genero
+Juego 3D top-down de sigilo y escape en un calabozo de fantasia.
+
+Objetivo
+El jugador aparece en la sala superior derecha. Debe recorrer el mapa, encontrar la llave en la sala inferior y volver hasta la salida ubicada en la zona superior izquierda. Si un enemigo alcanza al jugador, la escena se reinicia. Si el jugador llega a la salida con la llave, gana.
+
+Controles
+WASD o flechas: mover al jugador.
+Shift izquierdo: caminar en sigilo. Reduce la velocidad y el ruido emitido.
+
+Sistemas de IA implementados
+FSM: cada enemigo cambia entre estados como Patrol, Investigate, Chase, Flee y Attack.
+Line of Sight: la vision tiene distancia, angulo y raycast contra obstaculos. La LoS cambia decisiones de persecucion, huida e investigacion.
+Ruido: el jugador emite ruido al moverse. En sigilo el radio de ruido es menor.
+Steering Behaviors: Seek, Arrive, Wander, Pursue, Flee y Evade.
+Pathfinding: A* propio sobre nodos PathNode colocados en la escena. Los nodos conectan salas y pasillos evitando las paredes reales del mapa.
+Integracion: la FSM decide el objetivo, A* calcula el camino por pasillos y el steering mueve al agente entre nodos del camino.
+
+Enemigos
+Enemy_FastRunner_LowHearing: escucha poco, corre muy rapido, usa Wander al patrullar y Pursue en persecucion.
+Enemy_SlowListener: escucha mucho, se mueve lento, investiga con calma usando A* y Arrive.
+Enemy_BalancedScout: mezcla intermedia, combina persecucion con Pursue y puede usar Evade si el jugador se le acerca demasiado.
